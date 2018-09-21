@@ -18,7 +18,6 @@ npm install use-strict-cli -g
 
 ## Usage
 
-Command line help:
 ```bash
 use-strict [dir1] [dir2] [dirX] [--remove] [--prefer statement]
 ```
@@ -31,36 +30,24 @@ that you commit your current changes to source control
 or create a backup in case there are any undesirable
 changes.
 
+**Commands**
+
+* `add` - add strict mode to files
+* `remove` - remove strict mode from files
+
 **Options:**
-- `--help`: Help on using this command
-- `--remove`: Remove `'use strict'` statements
-- `--prefer`: Preferred "use strict" statement (e.g. `"use strict";`)
-
-**Add `'use strict';` to all files that do not already have it:**
-```bash
-use-strict ./src
 ```
-
-**Remove `'use strict';` from all files that have it:**
-```bash
-use-strict ./src --remove
+  --version   Show version number                      [boolean]
+  --files     file and dir names                       [array] [required]
+  --prefer    Preferred "use strict" statement (e.g. '"use strict";')
+                                                       [string] [default: false]
+  --match     path must match this regexp              [string] [default: false]
+  -h, --help  Show help                                [boolean]
 ```
 
 You will be prompted to confirm operation before changes will be saved.
 
-## Example
-
+**Example**
 ```bash
-cd ~/myproject
-use-strict ./src --prefer '"use strict";'
-
-Scanning following directories:
-- /Users/johndoe/myproject/src
-
-
-"use strict"; statement will be added to the following files:
-- server.js
-- cluster.js
-
-Continue? (yes) yes
+use-strict add --files . --match "*/tests/*"
 ```

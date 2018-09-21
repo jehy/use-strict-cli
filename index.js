@@ -1,150 +1,164 @@
+'use strict';
+
 require('colors');
 
-var path = require('path');
-var fs = require('fs');
-var directoryWalker = require('directory-walker');
-var series = require('raptor-async/series');
+const path = require('path');
+const fs = require('fs');
+const series = require('raptor-async/series');
+const {exec} = require('child_process');
+const Promise = require('bluebird');
+const prompt = require('prompt');
 
-var jsRegex = /\.js$/;
-
-function processFiles(files, options) {
-    var remove = options.remove;
-
-    files.forEach(function(file) {
-        var contents = file.contents;
-
-        if (remove) {
-            var match = file.match;
-            var occurrences = [];
-
-            do {
-                occurrences.push([match.index, match[0]]);
-            } while((match = file.regex.exec(contents)) !== null);
-
-            var i = occurrences.length;
-            while(--i >= 0) {
-                var occurrence = occurrences[i];
-                var pos = occurrence[0];
-                var str = occurrence[1];
-                contents = contents.substring(0, pos) + contents.substring(pos + str.length);
-            }
-        } else {
-            contents = options.prefer + '\n\n' + contents;
+async function getFiles(files, pathExp)
+{
+  return Promise.reduce(files, (res, file)=>{
+    let command = `find ${file} -type f -iname "*.js"`;
+    if (pathExp)
+    {
+      command = `${command} -ipath "${pathExp}"`;
+    }
+    command = `${command} ! -path "*/node_modules/*"`;
+    return new Promise((resolve, reject)=>{
+      exec(command, (error, stdout, stderr) => {
+        if (error)
+        {
+          console.log(stderr);
+          reject(error);
+          return;
         }
-
-        fs.writeFileSync(file.absolutePath, contents, {encoding: 'utf8'});
+        const list = stdout
+          .split('\n')
+          .map(item=>item.trim())
+          .filter(item=>item);
+        resolve(list.concat(res));
+      });
     });
+  }, []);
 }
 
-exports.run = function(options) {
-    options.prefer = options.prefer || '\'use strict\';';
+function processFiles(files, options) {
+  const remove = options.remove;
 
-    var dir = options.dir || process.cwd();
+  files.forEach((file) => {
+    let contents = file.contents;
 
-    var work = [];
+    if (remove) {
+      let match = file.match;
+      const occurrences = [];
 
-    if (!Array.isArray(dir)) {
-        dir = [dir];
+      do {
+        occurrences.push([match.index, match[0]]);
+      } while ((match = file.regex.exec(contents)) !== null);
+
+      let i = occurrences.length;
+      while (--i >= 0) {
+        const occurrence = occurrences[i];
+        const pos = occurrence[0];
+        const str = occurrence[1];
+        contents = contents.substring(0, pos) + contents.substring(pos + str.length);
+      }
+    } else {
+      contents = `${options.prefer}\n\n${contents}`;
     }
 
-    if (dir.length === 0) {
-        dir.push(process.cwd());
+    fs.writeFileSync(file.absolutePath, contents, {encoding: 'utf8'});
+  });
+}
+
+async function run(options) {
+  options.prefer = options.prefer || '\'use strict\';';
+  const pathExp = options.match;
+
+  let dir = options.dir || process.cwd();
+
+  const work = [];
+
+  if (!Array.isArray(dir)) {
+    dir = [dir];
+  }
+
+  if (dir.length === 0) {
+    dir.push(process.cwd());
+  }
+
+  for (let i = 0; i < dir.length; i++) {
+    dir[i] = path.resolve(process.cwd(), dir[i]);
+  }
+
+  console.log('\nScanning following directories or files:');
+  dir.forEach((item) => {
+    console.log(`${(` - ${item}`).gray}`);
+  });
+  console.log();
+  options.remove = (options.remove === true);
+  const remove = options.remove;
+
+
+  const allFiles = await getFiles(dir, pathExp);
+  const files = [];
+
+  function onFile(file) {
+    if (!file.endsWith('.js'))
+    {
+      return;
+    }
+    const contents = fs.readFileSync(file, {encoding: 'utf8'});
+    const regex = /(?:'use strict'|"use strict");?(\r?\n)+/g;
+    const match = regex.exec(contents);
+
+    if ((match && remove) || (!match && !remove)) {
+      files.push({
+        absolutePath: path.resolve(file),
+        relativePath: file,
+        match,
+        contents,
+        regex,
+      });
+    }
+  }
+  allFiles.forEach((file) => {
+    onFile(file, path.dirname(file));
+  });
+
+  series(work, (err) => {
+    if (!files.length) {
+      console.log('No files need to be updated.');
+      return;
     }
 
-    for (var i = 0; i < dir.length; i++) {
-        dir[i] = path.resolve(process.cwd(), dir[i]);
+    if (remove) {
+      console.log('"use strict" statement will be removed from the following files:');
+    } else {
+      console.log(`${options.prefer} will be added to the following files:`);
     }
+    files.forEach(file=>console.log(`${(` - ${file.relativePath}`).green}`));
+    console.log('');
 
-    console.log('\nScanning following directories or files:');
-    console.log(dir.map(function(dir) {
-        return (' - ' + dir).gray + '\n';
-    }).join(''));
-    console.log();
+    prompt.message = '';
+    prompt.delimiter = '';
 
-    var files = [];
-    var remove = options.remove = (options.remove === true);
+    //
+    // Start the prompt
+    //
+    prompt.start();
 
-    function onFile(file, dir) {
-        if (jsRegex.test(file)) {
-            var fileRelativePath = dir ? file.substring(dir.length + 1) : file;
-            var contents = fs.readFileSync(file, {encoding: 'utf8'});
-            var regex = /(?:\'use strict\'|\"use strict\");?(\r?\n)+/g;
-            var match = regex.exec(contents);
-
-            if ((match && remove) || (!match && !remove)) {
-                files.push({
-                    absolutePath: file,
-                    relativePath: fileRelativePath,
-                    match: match,
-                    contents: contents,
-                    regex: regex
-                });
-            }
-        }
-    }
-
-    dir.forEach(function(dir) {
-        var stat = fs.statSync(dir);
-        if (stat.isFile()) {
-            onFile(dir, stat);
-        } else {
-            work.push(function(callback) {
-                directoryWalker.create()
-                    .onFile(function(file, stat) {
-                        onFile(file, dir);
-                    })
-
-                    .onComplete(function() {
-                        callback();
-                    })
-
-                    .walk(dir);
-            });
-        }
+    //
+    // Get two properties from the user: username and email
+    //
+    prompt.get([{
+      name: 'answer',
+      description: 'Continue?',
+      required: true,
+      default: 'yes',
+    }], (err2, result) => {
+      const answer = result.answer.toLowerCase();
+      if ((answer === 'y') || (answer === 'yes')) {
+        processFiles(files, options);
+      } else {
+        console.log('Operation canceled'.red);
+      }
     });
+  });
+}
 
-    series(work, function(err) {
-        if (!files.length) {
-            console.log('No files need to be updated.');
-            return;
-        }
-
-        if (remove) {
-            console.log('"use strict" statement will be removed from the following files:');
-        } else {
-            console.log(options.prefer + ' will be added to the following files:');
-        }
-
-        console.log(files.map(function(file) {
-            return (' - ' + file.relativePath).green + '\n';
-        }).join(''));
-
-        console.log('');
-
-        var prompt = require('prompt');
-        prompt.message = '';
-        prompt.delimiter = '';
-
-        //
-        // Start the prompt
-        //
-        prompt.start();
-
-        //
-        // Get two properties from the user: username and email
-        //
-        prompt.get([{
-            name: 'answer',
-            description: 'Continue?',
-            required: true,
-            default: 'yes'
-        }], function (err, result) {
-            var answer = result.answer.toLowerCase();
-            if ((answer === 'y') || (answer === 'yes')) {
-                processFiles(files, options);
-            } else {
-                console.log('Operation canceled'.red);
-            }
-        });
-    });
-};
+module.exports = {run};

@@ -7,7 +7,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/philidem/use-strict-cli.git"
+        "url": "git+https://github.com/jehy/use-strict-cli.git"
     },
     "keywords": [
         "use",
@@ -15,21 +15,29 @@
         "es6",
         "usestrict"
     ],
-    "author": "Phillip Gates-Idem <phillip.idem@gmail.com>",
+    "author": "Phillip Gates-Idem <phillip.idem@gmail.com>, github.com/jehy",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/philidem/use-strict-cli/issues"
+        "url": "https://github.com/jehy/use-strict-cli/issues"
     },
-    "homepage": "https://github.com/philidem/use-strict-cli#readme",
+    "homepage": "https://github.com/jehy/use-strict-cli#readme",
     "bin": {
         "use-strict": "bin/use-strict"
     },
     "dependencies": {
+        "bluebird": "~3.5.2",
         "colors": "^1.1.2",
-        "directory-walker": "^1.2.5",
-        "minimist": "^1.2.0",
         "prompt": "^0.2.14",
-        "raptor-async": "^1.1.2"
+        "raptor-async": "^1.1.2",
+        "yargs": "~12.0.2"
     },
-    "version": "1.0.1"
+    "devDependencies": {
+        "eslint": "^5.6.0",
+        "eslint-config-airbnb-base": "^13.1.0",
+        "eslint-loader": "^2.1.0",
+        "eslint-plugin-import": "^2.14.0",
+        "eslint-plugin-promise": "^4.0.1",
+        "eslint-plugin-standard": "^4.0.0"
+    },
+    "version": "2.0.0"
 }
